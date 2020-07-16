@@ -12,6 +12,7 @@ import cv2
 from os import listdir
 from os.path import isfile, join
 import csv
+from pathlib import Path
 
 
 def autolabel(rects):
@@ -217,6 +218,7 @@ for file in onlyfiles:
         rects1 = ax.bar(Durchmesser, rel_mass, width=bin_width , color='yellow',align='edge',edgecolor='black')
         autolabel(rects1)
 
+        Path(Analysiert).mkdir(parents=True, exist_ok=True)
         new_path=Analysiert+'//'+foldername+'_'+Bildname+'_'+str(counter)+'__'+'local_Histogramm_corrected'+'.JPG'
 
         plt.savefig(new_path)
@@ -246,23 +248,4 @@ for file in onlyfiles:
 
 
         all_local_hists[counter]=local_hist
-'''
-dist_dict=dict()
-for hist in all_local_hists:
-    for hist2 in all_local_hists:
-        distanz=0
-        
-        for bar in hist:
-            for bar2 in hist2:
-                if bar==bar2:
-                    distanz=distanz+abs(hist[bar]-hist2[bar2])
-        dist_dict[hist,hist2]=distanz
-print(dist_dict)
-'''
-
-    
-
-
-        
-
 

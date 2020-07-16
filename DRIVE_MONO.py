@@ -14,6 +14,7 @@ import cv2
 from os import listdir
 from os.path import isfile, join
 import csv
+from pathlib import Path
 
 
 
@@ -226,8 +227,7 @@ for file in onlyfiles:
         rects1 = ax.bar(Durchmesser, rel_mass, width=bin_width , color='green',align='edge',edgecolor='black')
         autolabel(rects1)
 
-
-        
+        Path(Analysiert).mkdir(parents=True, exist_ok=True)
         new_path=Analysiert+'//'+foldername+'_'+Bildname+'_'+str(counter)+'__'+'GLOBAL_Histogramm'+'.JPG'
         print(new_path)
 
