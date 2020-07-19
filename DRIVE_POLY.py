@@ -15,90 +15,110 @@ import csv
 from pathlib import Path
 
 
-def autolabel(rects):
-
+def autolabel(rects):#source: [.........]
+    """
+    Attach a text label above each bar displaying its height
+    """
     for rect in rects:
         height = rect.get_height()
         ax.text(rect.get_x() + rect.get_width()/2., 1.05*height,
                 '%d' % int(height),
                 ha='center', va='bottom')
+                
+def make_local_hist(radius_list):
+        print('create a dictionary: keys=corn size range, values= radia')
+        binning_list1=[(45,55),(56,70),(71,99),(100,124),(125,149),(150,199),(200,249),(250,299),(300,399),(400,499),(500,600)]
+        binning_list=[(k[0]/2,k[1]/2) for k in binning_list1]
+        local_hist=dict()
+        total_mass=0
+        for thresh in binning_list:
+                local_hist[thresh]=[0] 
+                for radius in radius_list:
+                        
+                        if thresh[0]<radius<thresh[1]:
+                                if local_hist[thresh]==[0]:
+                                        local_hist[thresh]=[3.14*4/3*radius**3]
+                                        total_mass=total_mass+3.14*4/3*radius**3
+                                else:
+                                        local_hist[thresh].append(3.14*4/3*radius**3)
+                                        total_mass=total_mass+3.14*4/3*radius**3
+        rel_mass2=0
+        for thresh in local_hist:
+                rel_mass=0
+                for masse in local_hist[thresh]:
+                        rel_mass=rel_mass+masse
+                rel_mass2=rel_mass2+rel_mass
+                
+                local_hist[thresh]=rel_mass/total_mass*100
+        print('total_mass,rel_mass2',total_mass,rel_mass2)
+        return local_hist
 
-def Find_circles(new_path,put,filename,SF1,SF2,KS,C,minDist, pix_um): #21,51,501,(-10->10)
+def Find_circles(source_directory,put,filename,SF1,SF2,KS,C,minDist,pix_um,overlap):   
+    #source_directory, put, filename= directories for source and store directory
+    #SF1,SF2= meanshift kernel size (here: 21,51)
     
-    image = cv2.imread(new_path)
-    print('OPENED')
+    image = cv2.imread(source_directory)
+    print('OPENED',source_directory)
+    print('################# level out global gradient and transform to binary #######')
     shifted = cv2.pyrMeanShiftFiltering(image, SF1,SF2)#21, 51)
-    #cv2.imshow("Input", shifted)
-
-
     gray = cv2.cvtColor(shifted, cv2.COLOR_BGR2GRAY)
     thresh = cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
                                   cv2.THRESH_BINARY,KS,C)#501,10)
+    print('####create maxima by distance transform in the center of the beads and watershed ######')
+    D = ndimage.distance_transform_edt(thresh)                                      #thin regions become darker
+    localMax = peak_local_max(D, indices=False, min_distance=minDist,labels=thresh) 
+    markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]         
+    labels = watershed(-D, markers, mask=thresh)                                    #separate particles
 
-    D = ndimage.distance_transform_edt(thresh)
-    #cv2.imshow("Thresh", D)
-    localMax = peak_local_max(D, indices=False, min_distance=minDist,
-            labels=thresh)
 
-    markers = ndimage.label(localMax, structure=np.ones((3, 3)))[0]
-    labels = watershed(-D, markers, mask=thresh)
-    #print("[INFO] {} unique segments found".format(len(np.unique(labels)) - 1))
-
-    #############################################################################
-    kreis_liste=list()
-    radius_liste=list()
+    print('################ find OBJECTS ####################')
+    all_circles_list=list()
+    all_radia_list=list()
+    all_circles_DICT=dict()
     for label in np.unique(labels):
             if label == 0:
                     continue
             mask = np.zeros(gray.shape, dtype="uint8")
             mask[labels == label] = 255
-            cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+            cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,                 #create contourgroups
                     cv2.CHAIN_APPROX_SIMPLE)
-            cnts = imutils.grab_contours(cnts)
+            cnts = imutils.grab_contours(cnts)                                      #center of countourgroup
             c = max(cnts, key=cv2.contourArea)
             ((x, y), r) = cv2.minEnclosingCircle(c)
-            
             if r>minDist:
-                kreis_liste.append(((x, y), r))
-                radius_liste.append(r*pix_um)
+                all_circles_list.append((label,(x, y), r))
+                all_circles_DICT[label]=[(x, y), r]
+                all_radia_list.append(r*pix_um)
     
-    radius_liste_schlecht=list()
-    kreis_liste_schlecht=list()
-    checked=list()
-    for (x1, y1), r1 in kreis_liste:
-        for (x, y), r in kreis_liste:
-            Distanz=((x-x1)**2+(y-y1)**2)**0.5
-            if  [((x, y), r),((x1,y1), r1)] not in kreis_liste_schlecht and [((x1, y1), r1),((x,y), r)] not in kreis_liste_schlecht and(x1,y1)!=(x,y):
-                if Distanz<0.8*(r+r1):
-                    radius_liste_schlecht.append(r)
-                    kreis_liste_schlecht.append([((x, y), r),((x1,y1), r1)])
+    print('###########################################################################')
+    print('############################ Sort out #####################################')
+    print('###########################################################################')
+    
+    
+    print('identify strongly overlapping circles; too much overlapp is a sign for failed center or countour detection')
+    overlapping_radia_list=list()
+    overlapping_circles_list=list()
+    overlapping_circles_DICT=dict()
+    for label1,(x1, y1), r1 in all_circles_list:
+        for label,(x, y), r in all_circles_list:
+            dist=((x-x1)**2+(y-y1)**2)**0.5
+            if  [(label,(x, y), r),(label1,(x1,y1), r1)] not in overlapping_circles_list and [(label1,(x1, y1), r1),(label,(x,y), r)] not in overlapping_circles_list and label!=label1:
+                if dist<overlap*(r+r1):
+                    overlapping_radia_list.append(r)
+                    overlapping_radia_list.append(r1)
+                    overlapping_circles_list.append([(label,(x, y), r),(label1,(x1,y1), r1)])
+                    overlapping_circles_DICT[label]=[(x, y), r]
+                    overlapping_circles_DICT[label1]=[(x1, y1), r1]
+                   
+    print('### collect circles that do not overlap more than overlap in %')
 
-                    
+    cleaned_radia_list=[r*pix_um for r in all_radia_list if r not in overlapping_radia_list]
+    cleaned_circle_list=[(label,(x, y), r) for (label,(x, y), r) in all_circles_list if r not in overlapping_radia_list]
+    
+    
+    print('### !!!!!!!!! preparation for visualisation of 3 classes of particles, FG=below ,//// HG within ///GG= above a desired size')
+    global_hist=make_local_hist(cleaned_radia_list)
 
-
-    Verdachtsfälle=list()
-    for [((x, y), r),((x1,y1), r1)] in kreis_liste_schlecht:
-        if r*pix_um not in Verdachtsfälle and r1*pix_um not in Verdachtsfälle:
-            Verdachtsfälle.append(r*pix_um)
-            Verdachtsfälle.append(r1*pix_um)
-    print('schlecht',len(kreis_liste_schlecht), len(Verdachtsfälle))
-
-    radius_liste2=[r_pix_um for r_pix_um in radius_liste if r_pix_um not in Verdachtsfälle]
-
-    kreis_liste2=[((x, y), r) for ((x, y), r) in kreis_liste if r*pix_um not in Verdachtsfälle]
-    print('radius, radius2,Verdachtsfälle',len(radius_liste), len(radius_liste2), len(Verdachtsfälle))
-
-
-
-
-
-
- 
-    global_hist=make_local_hist(radius_liste2)
-
-                        
-
-        
     FG=0
     HG=300
     GG=400
@@ -122,8 +142,8 @@ def Find_circles(new_path,put,filename,SF1,SF2,KS,C,minDist, pix_um): #21,51,501
         
     print('FG0,HG0,GG0',FG0,HG0,GG0)
 
-
-    for (x, y), r in kreis_liste2:
+    print('### !!!!!!!!! Visualisation of 3 classes of particles, FG, HG,GG')
+    for label,(x, y), r in cleaned_circle_list:
         if FG<2*r*pix_um<HG:
             cv2.circle(image, (int(x), int(y)), int(r), (255, 0, 0), 2)
             cv2.putText(image, "{}".format(int(2*r*pix_um)), (int(x) - 10, int(y)),cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
@@ -142,105 +162,83 @@ def Find_circles(new_path,put,filename,SF1,SF2,KS,C,minDist, pix_um): #21,51,501
     cv2.putText(image, "{}".format(int(GG0)), (200, 200),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     cv2.imwrite(put+'//'+filename, image)
-    return  radius_liste, radius_liste2, Verdachtsfälle
-    
-def make_local_hist(radius_liste):
-        
-        binning_list1=[(45,55),(56,70),(71,99),(100,124),(125,149),(150,199),(200,249),(250,299),(300,399),(400,499),(500,600)]
-        binning_list=[(k[0]/2,k[1]/2) for k in binning_list1]
-        local_hist=dict()
-        total_mass=0
-        for thresh in binning_list:
-                local_hist[thresh]=[0] 
-                for radius in radius_liste:
-                        
-                        if thresh[0]<radius<thresh[1]:
-                                if local_hist[thresh]==[0]:
-                                        local_hist[thresh]=[3.14*4/3*radius**3]
-                                        total_mass=total_mass+3.14*4/3*radius**3
-                                else:
-                                        local_hist[thresh].append(3.14*4/3*radius**3)
-                                        total_mass=total_mass+3.14*4/3*radius**3
-                        #print('total_mass,3.14*4/3*radius**3',int(total_mass),int(3.14*4/3*radius**3))
-        rel_mass2=0
-        for thresh in local_hist:
-                rel_mass=0
-                for masse in local_hist[thresh]:
-                        rel_mass=rel_mass+masse
-                rel_mass2=rel_mass2+rel_mass
-                
-                local_hist[thresh]=rel_mass/total_mass*100
-        print('total_mass,rel_mass2',total_mass,rel_mass2)
-        return local_hist
+    return  all_radia_list, cleaned_radia_list, overlapping_radia_list
 
-foldername='Polydisperse'
-take=r'./'+foldername
-Analysiert=r'./'+'Analyzed_poly'
 
+
+################################################################################################################################
+################################# Execute ######################################################################################
+################################################################################################################################
+
+
+#Paths
+source_folder='Polydisperse_Input_images'
+source_directory=r'./'+source_folder
+destination=r'./'+'Analyzed_Poly'
+#Magnification factors: pixel to µm
 pixel_to_um_0=250/78
 pixel_to_um_1=250/227
 pixel_to_um_2=250/412
-
 pixel_to_um_0_16=250/77*4/1.6
 pixel_to_um_1_16=250/227*4/1.6
 pixel_to_um_1_16_zoom_out=1000/356
 pixel_to_um_1_16_zoom_in=1000/380
 pixel_to_um_2_16=250/412*4/1.6
 
+pics = [f for f in listdir(source_directory) if isfile(join(source_directory, f))]
 
 
-onlyfiles = [f for f in listdir(take) if isfile(join(take, f))]
-#p#print.p#print(onlyfiles)
 counter=0
 global_radius_liste=list()
-global_radius_liste2=list()
+global_radia_list=list()
 global_Verdachts_liste=list()
 all_local_hists=dict()
 
-for file in onlyfiles:
+for pic in pics:
         counter=counter+1
-
+        pic_name=pic[0:len(pic)-4]
+        filename='//'+pic
+        take=source_directory+filename
+        new_pic_name=source_folder+'_'+pic_name+'_'+'__'+str(counter)+'.JPG'
         
-        Bildname=file[0:len(file)-4]
-        filename='//'+file
-        path=take+filename
-        file2=foldername+'_'+Bildname+'_'+'__'+str(counter)+'Poly'+'.JPG'
-
-        radius_liste,radius_liste2,Verdachtsfälle=Find_circles(path,Analysiert,file2,21,51,501,0,20,pixel_to_um_1_16_zoom_in)
+        print('##############Find_circles##########################')
+        all_radia_list, cleaned_radia_list, overlapping_radia_list=Find_circles(take,destination,new_pic_name,21,51,501,0,20,pixel_to_um_1_16_zoom_in,overlap=0.6)
         
-                
-        local_hist=make_local_hist(radius_liste2)
+        print('# LOCAL histogramm')
+        local_hist=make_local_hist(cleaned_radia_list)
         rel_mass=[local_hist[k] for k in local_hist]
-        Durchmesser=[2*(k[0]) for k in local_hist]
+        diameter=[2*(k[0]) for k in local_hist]
         bin_width=[2*(k[1]-k[0]) for k in local_hist]
-
         fig, ax = plt.subplots()
-        rects1 = ax.bar(Durchmesser, rel_mass, width=bin_width , color='yellow',align='edge',edgecolor='black')
+        rects1 = ax.bar(diameter, rel_mass, width=bin_width , color='yellow',align='edge',edgecolor='black')
         autolabel(rects1)
-
-        Path(Analysiert).mkdir(parents=True, exist_ok=True)
-        new_path=Analysiert+'//'+foldername+'_'+Bildname+'_'+str(counter)+'__'+'local_Histogramm_corrected'+'.JPG'
+        
+        Path(destination).mkdir(parents=True, exist_ok=True)
+        new_path=destination+'//'+source_folder+'_'+pic_name+'_'+str(counter)+'__'+'local_Histogramm_corrected'+'.JPG'
 
         plt.savefig(new_path)
         plt.clf()
         plt.close()
+        
+        
+        
+        print('# GLOBAL histogramm')
+        for elements in cleaned_radia_list:
+                global_radia_list.append(elements)
 
-        for elements in radius_liste2:
-                global_radius_liste2.append(elements)
-
-        global_hist2=make_local_hist(global_radius_liste2)
+        global_hist=make_local_hist(global_radia_list)
         print('GLOBAL',len(local_hist))
 
                     
-        rel_mass=[global_hist2[k] for k in global_hist2]
-        Durchmesser=[2*(k[0]) for k in global_hist2]
-        bin_width=[2*(k[1]-k[0]) for k in global_hist2]
+        rel_mass=[global_hist[k] for k in global_hist]
+        diameter=[2*(k[0]) for k in global_hist]
+        bin_width=[2*(k[1]-k[0]) for k in global_hist]
 
         fig, ax = plt.subplots()
-        rects1 = ax.bar(Durchmesser, rel_mass, width=bin_width , color='blue',align='edge',edgecolor='black')
+        rects1 = ax.bar(diameter, rel_mass, width=bin_width , color='blue',align='edge',edgecolor='black')
         autolabel(rects1)
 
-        new_path=Analysiert+'//'+foldername+'_'+Bildname+'_'+str(counter)+'__'+'GLOBAL_Histogramm_POLY'+'.JPG'
+        new_path=destination+'//'+source_folder+'_'+pic_name+'_'+str(counter)+'__'+'GLOBAL_Histogramm_POLY'+'.JPG'
 
         plt.savefig(new_path)
         plt.clf()
