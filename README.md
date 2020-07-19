@@ -21,7 +21,7 @@ Even circles that correspond to real beads often overestimate the radius by 10 t
 'DRIVE_MONO.py' and 'DRIVE_POLY.py' also differ regarding their output histogramms. This has no specific reason, I just wanted to experiment a bit with the histograms as I am just learning Python. I distinguish between local and global histograms; the first displaying the mass distribution of each single image, the latter sums up all the data from the previous images as well. While in 'DRIVE_MONO.py' there is only a global histogram, 'DRIVE_POLY.py' also considers local distributions. 
 
 ### Circles colorcode
-In 'DRIVE_POLY.py' correctly detected cicles are colorcoded, to visualzed whether the bead size is below, within or above a desired size range. Circles that overlap strangly are not shown anymore, in contrast to 'DRIVE_MONO.py'.
+In 'DRIVE_POLY.py' correctly detected cicles are colorcoded, to visualzed whether the bead size is below, within or above a desired size range. Circles that overlap strongly are not shown anymore, in contrast to 'DRIVE_MONO.py'.
 
 ## Installation
 You need Python >= 3.6 installed on your sytem. To install the required packages, run 
@@ -31,22 +31,36 @@ pip install -r requirements.txt
 
 ## Run particle detection
 
-To start particle detection for monodisperse particles (using images from the `Monodisperse` folder) , run
+To start particle detection for monodisperse particles (using images from the `Monodisperse_Input_images` folder) , run
 ```
 python DRIVE_MONO.py
 ```
-For polydisperse particles (using images from the `Polydisperse` folder) , run
+For polydisperse particles (using images from the `Polydisperse_Input_images` folder) , run
 ```
 python DRIVE_POLY.py
 ```
 
 [Where to find result? What are the results (histogram etc)]
 
-## Example
+## Example DRIVE_MONO
 
 ### Input image
-![Input Image](Input_image.JPG?raw=true "Input Image")
+![Input Image](MONO_Input.JPG?raw=true "Input Image Monodisperse")
 ### Output image
-![Output Image](Output_image.JPG?raw=true "Output Image")
-### Histogram
-![Input Image](GLOBAL_Histogramm.JPG?raw=true "Histogram")
+![Output Image](Output_MONO.JPG?raw=true "Output Image Monodisperse")
+### GlobalHistogram
+![histogramm](MONO_GLOBAL_Histogramm.JPG?raw=true "Global Histogram Monodisperse")
+
+## Example DRIVE_POLY
+
+### Input image
+![Input Image](POLY_Input.JPG?raw=true "Input Image Monodisperse")
+### Output image
+![Output Image](Output_POLY.JPG?raw=true "Output Image Monodisperse")
+### GlobalHistogram
+![histogramm](POLY_GLOBAL_Histogramm.JPG?raw=true "Global Histogram Monodisperse")
+### localHistogram
+![histogramm](POLY_local_Histogramm.JPG?raw=true "local Histogram Monodisperse")
+
+
+
